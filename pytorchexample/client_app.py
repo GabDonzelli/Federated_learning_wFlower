@@ -28,9 +28,9 @@ def train(msg: Message, context: Context):
     batch_size = context.run_config["batch-size"]
     trainloader, _ = load_data(partition_id, num_partitions, batch_size)
 
-    #to be able the partitions id to each client
-    partition_names =  [" zero ", " one ", " two ", " three ", " four ", " five ", " six ", " seven ", " eight ", " nine "]
-    print(f"clients{partition_names[partition_id]}: ", f"node_id = {context.node_id}, ",f"partition = {partition_id}")
+    #to be able the partitions id to each client (MORE VISUAL)
+    #partition_names =  [" zero ", " one ", " two ", " three ", " four ", " five ", " six ", " seven ", " eight ", " nine "]
+    #print(f"clients{partition_names[partition_id]}: ", f"node_id = {context.node_id}, ",f"partition = {partition_id}")
 
 
     # Call the training function
