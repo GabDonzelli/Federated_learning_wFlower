@@ -10,54 +10,53 @@ from pytorchexample.task import Net, load_centralized_dataset, test
 # Create ServerApp
 app = ServerApp()
 
+"""CLients have their artition of the dataset. They also have their node identity, which means where they are trained.
+    The clients numbers are their partition number."""
+
 #create a customized strategy to be able to get the node and partition relation
 class CustomFedAvg(FedAvg):
-    def __init__(self, partition_to_node, **kwargs):
+    def __init__(self, client_to_node, **kwargs):
         super().__init__(**kwargs)
         # Dictionary to store partition-to-node mapping
-        self.partition_to_node = partition_to_node  
+        self.client_to_node = client_to_node  
         # Dictionary to store client names
-        self.client_names = {}  
+        #self.client_names = {}  
 
     def configure_train(self, server_round, arrays, config, grid):
-        print("MY CUSTOM STRATEGY was executed")
+        print(f"Configuring training for server round {server_round}...")
 
         # first round == mapping
         if server_round == 1:
-            #print("\nClient mapping: ")
 
             #to name clients 
-            """for client_number, (partition_id, node_id) in enumerate ( 
-                sorted(self.partition_to_node.items()), start = 1): 
+            #for client_number, (client_id, node_id) in enumerate ( 
+                #sorted(self.client_to_node.items()), start = 1): 
 
-                client_name = f"Client {client_number}" 
-                self.client_names[node_id] = client_name
+                #client_name = f"Client {client_number}" 
+                #self.client_names[node_id] = client_name
 
-                print(f"{client_name} is on Node {node_id} with Partition {partition_id}")"""
-            
-            for partition_id, node_id in sorted(self.partition_to_node.items()):
-                # Name clients based on partition_id (1 to 10)
-                client_name = f"Client {partition_id + 1}" 
-                self.client_names[node_id] = client_name
+                #print(f"{client_name} is on Node {node_id} with Partition {client_id}")
 
-                print(f"{client_name} = partition {partition_id}")
 
             return super().configure_train(server_round, arrays, config, grid)
         
-        elif server_round == 2:
-            selected_partitions = [0,1,2,3,4]
+        if server_round == 2:
+            selected_clients = [1,2,3,4,5]
+            for i in range(len(selected_clients)):
+                client_id = selected_clients[i]
+                node_id = self.client_to_node[client_id]
+                print(f"Client selected: {selected_clients[i]} and is on Node {node_id} ")
                                    
-        elif server_round == 3:
-            selected_partitions = [5,6,7,8,9]
+        if server_round == 3:
+            selected_clients = [6,7,8,9,10]
+            #pode vir a virar uma funcao print###################################
+            for i in range(len(selected_clients)):
+                client_id = selected_clients[i]
+                node_id = self.client_to_node[client_id]
+                print(f"Client selected: {selected_clients[i]} and is on Node {node_id} ")
 
         # get the node_id of the selected partitions and print them
-        selected_nodes = [self.partition_to_node[partition_id] for partition_id in selected_partitions]
-
-        #get the cliets names list
-        selected_client_names = [self.client_names[node_id] for node_id in selected_nodes]
-
-        #print(f"Round {server_round}: selected partition: {selected_nodes}")
-        print(f"Round {server_round}: selected clients: {selected_client_names}")
+        selected_nodes = [self.client_to_node[client_id] for client_id in selected_clients]
 
         # update the config with the current server_round   
         config["server_round"] =  server_round
@@ -74,21 +73,24 @@ class CustomFedAvg(FedAvg):
 
         for reply in replies: 
             if reply.has_content(): 
-                partition_id = int (reply.content["metrics"]["partition-id"]
-                                    )
+                client_id = int (reply.content["metrics"]["partition-id"])
+                
+                client_id = client_id + 1
                 node_id = reply.metadata.src_node_id
- 
+                
                 # Store the mapping
-                self.partition_to_node[partition_id] = node_id  
+                # only save the mapping once per client
+                if client_id not in self.client_to_node:
+                    self.client_to_node[client_id] = node_id 
+
                 # Remove partition-id from metrics
                 reply.content["metrics"].pop("partition-id", None)  
         
-        #print the mapping of partition to node after each round
-        print( "Mapping : ")
-        for partition_id, node_id in sorted(self.partition_to_node.items()):
-            print(f"Partition {partition_id} is on Node {node_id}")
-
         
+        if server_round == 1:
+            print(f"\nMapping round {server_round}:")
+            for client_id, node_id in sorted(self.client_to_node.items()):
+                print(f"Client {client_id}: Node {node_id}")
 
         return super().aggregate_train(server_round, replies)
 
@@ -98,16 +100,25 @@ def main(grid: Grid, context: Context) -> None:
     """Main entry point for the ServerApp."""
 
     # list of node and partition relation 
-    partition_to_node = {} 
+    client_to_node = {} 
 
     # Read run config
     fraction_evaluate: float = context.run_config["fraction-evaluate"]
     num_rounds: int = context.run_config["num-server-rounds"]
     lr: float = context.run_config["learning-rate"]
 
-    #Show SuperNodes available
+    # Show mapping of clients and nodes
     node_ids = list(grid.get_node_ids())
-    print(f"SuperNodes available: {node_ids}")
+
+    # create a fixed mapping once
+    client_to_node = {
+        client_id: node_id
+        for client_id, node_id in enumerate(node_ids, start=1)
+    }
+
+    print("Client mapping:")
+    for client_id, node_id in sorted(client_to_node.items()):
+        print(f"Client {client_id}: Node {node_id}")
 
     # Load global model
     global_model = Net()
@@ -118,7 +129,7 @@ def main(grid: Grid, context: Context) -> None:
 
     #initialize the custom strategy
     strategy = CustomFedAvg(
-        partition_to_node=partition_to_node,
+        client_to_node=client_to_node,
         fraction_evaluate=fraction_evaluate,
         min_train_nodes = 2,
         min_evaluate_nodes = 2,
