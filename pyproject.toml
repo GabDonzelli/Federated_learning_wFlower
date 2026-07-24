@@ -33,3 +33,6 @@ local-epochs = 1
 learning-rate = 0.1
 batch-size = 32
 save-model = false
+selection-mode = "odd-even"
+clients-per-round = 5
+random-seed = 42
